@@ -128,6 +128,9 @@ type Response struct {
 	// map of header values
 	Header Header
 
+	// tunnel: proto
+	Protocol string
+
 	// optional body
 	Body []byte
 }
@@ -140,8 +143,9 @@ func (res *Response) Unmarshal(br *bufio.Reader) error {
 	}
 	proto := byts[:len(byts)-1]
 
-	if string(proto) != rtspProtocol10 {
-		return fmt.Errorf("expected '%s', got %v", rtspProtocol10, proto)
+	// tunnel:
+	if string(proto) != rtspProtocol10 && string(proto) != httpProtocol10 {
+		return fmt.Errorf("expected '%s' or '%s', got %v", rtspProtocol10, httpProtocol10, proto)
 	}
 
 	byts, err = readBytesLimited(br, ' ', 4)
@@ -216,8 +220,8 @@ func (res Response) MarshalTo(buf []byte) (int, error) {
 	}
 
 	pos := 0
-
-	pos += copy(buf[pos:], []byte(rtspProtocol10))
+	//tunnel:
+	pos += copy(buf[pos:], []byte(res.proto()))
 	buf[pos] = ' '
 	pos++
 	pos += copy(buf[pos:], []byte(strconv.FormatInt(int64(res.StatusCode), 10)))
@@ -251,4 +255,15 @@ func (res Response) Marshal() ([]byte, error) {
 func (res Response) String() string {
 	buf, _ := res.Marshal()
 	return string(buf)
+}
+
+// tunnel:
+// get protocol
+func (req Response) proto() string {
+	proto := req.Protocol
+	if proto == "" {
+		proto = rtspProtocol10
+	}
+
+	return proto
 }

@@ -14,6 +14,8 @@ const (
 	requestMaxMethodLength   = 64
 	requestMaxURLLength      = 2048
 	requestMaxProtocolLength = 64
+	// tunnel:
+	httpProtocol10 = "HTTP/1.0"
 )
 
 // Method is the method of a RTSP request.
@@ -21,6 +23,10 @@ type Method string
 
 // methods.
 const (
+	// tunnel:
+	Get  Method = "GET"
+	Post Method = "POST"
+
 	Announce     Method = "ANNOUNCE"
 	Describe     Method = "DESCRIBE"
 	GetParameter Method = "GET_PARAMETER"
@@ -40,6 +46,9 @@ type Request struct {
 
 	// request url
 	URL *url.URL
+
+	// tunnel:
+	Protocol string
 
 	// map of header values
 	Header Header
@@ -82,8 +91,9 @@ func (req *Request) Unmarshal(br *bufio.Reader) error {
 	}
 	proto := byts[:len(byts)-1]
 
-	if string(proto) != rtspProtocol10 {
-		return fmt.Errorf("expected '%s', got %v", rtspProtocol10, proto)
+	// tunnel:
+	if string(proto) != rtspProtocol10 && string(proto) != httpProtocol10 {
+		return fmt.Errorf("expected '%s' or '%s', got %v", rtspProtocol10, httpProtocol10, proto)
 	}
 
 	err = readByteEqual(br, '\n')
@@ -143,7 +153,8 @@ func (req Request) MarshalTo(buf []byte) (int, error) {
 
 	buf[pos] = ' '
 	pos++
-	pos += copy(buf[pos:], rtspProtocol10)
+	// tunnel:
+	pos += copy(buf[pos:], req.proto())
 	buf[pos] = '\r'
 	pos++
 	buf[pos] = '\n'
@@ -171,4 +182,15 @@ func (req Request) Marshal() ([]byte, error) {
 func (req Request) String() string {
 	buf, _ := req.Marshal()
 	return string(buf)
+}
+
+// tunnel:
+// get protocol
+func (req Request) proto() string {
+	proto := req.Protocol
+	if proto == "" {
+		proto = rtspProtocol10
+	}
+
+	return proto
 }
