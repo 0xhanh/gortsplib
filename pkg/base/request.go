@@ -146,7 +146,14 @@ func (req Request) MarshalTo(buf []byte) (int, error) {
 	pos++
 
 	if req.URL != nil {
-		pos += copy(buf[pos:], []byte(req.URL.CloneWithoutCredentials().String()))
+		// tunnel:
+		if req.proto() == httpProtocol10 {
+			// path: /profile/media.smp
+			path := []byte(req.URL.Path)
+			pos += copy(buf[pos:], path)
+		} else {
+			pos += copy(buf[pos:], []byte(req.URL.CloneWithoutCredentials().String()))
+		}
 	} else {
 		pos += copy(buf[pos:], []byte("*"))
 	}
