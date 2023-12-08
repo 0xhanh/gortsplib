@@ -29,7 +29,6 @@ import (
 	"github.com/bluenviron/gortsplib/v4/pkg/liberrors"
 	"github.com/bluenviron/gortsplib/v4/pkg/rtptime"
 	"github.com/bluenviron/gortsplib/v4/pkg/sdp"
-	"github.com/bluenviron/gortsplib/v4/pkg/url"
 )
 
 // convert an URL into an address, in particular:
@@ -37,7 +36,7 @@ import (
 // * handle IPv6 with or without square brackets.
 // Adapted from net/http:
 // https://cs.opensource.google/go/go/+/refs/tags/go1.20.5:src/net/http/transport.go;l=2747
-func canonicalAddr(u *url.URL) string {
+func canonicalAddr(u *base.URL) string {
 	addr := u.Hostname()
 
 	port := u.Port()
@@ -56,10 +55,10 @@ func isAnyPort(p int) bool {
 	return p == 0 || p == 1
 }
 
-func findBaseURL(sd *sdp.SessionDescription, res *base.Response, u *url.URL) (*url.URL, error) {
+func findBaseURL(sd *sdp.SessionDescription, res *base.Response, u *base.URL) (*base.URL, error) {
 	// use global control attribute
 	if control, ok := sd.Attribute("control"); ok && control != "*" {
-		ret, err := url.Parse(control)
+		ret, err := base.ParseURL(control)
 		if err != nil {
 			return nil, fmt.Errorf("invalid control attribute: '%v'", control)
 		}
@@ -76,7 +75,7 @@ func findBaseURL(sd *sdp.SessionDescription, res *base.Response, u *url.URL) (*u
 			return nil, fmt.Errorf("invalid Content-Base: '%v'", cb)
 		}
 
-		ret, err := url.Parse(cb[0])
+		ret, err := base.ParseURL(cb[0])
 		if err != nil {
 			return nil, fmt.Errorf("invalid Content-Base: '%v'", cb)
 		}
@@ -138,23 +137,23 @@ func (s clientState) String() string {
 }
 
 type optionsReq struct {
-	url *url.URL
+	url *base.URL
 	res chan clientRes
 }
 
 type describeReq struct {
-	url *url.URL
+	url *base.URL
 	res chan clientRes
 }
 
 type announceReq struct {
-	url  *url.URL
+	url  *base.URL
 	desc *description.Session
 	res  chan clientRes
 }
 
 type setupReq struct {
-	baseURL  *url.URL
+	baseURL  *base.URL
 	media    *description.Media
 	rtpPort  int
 	rtcpPort int
@@ -246,6 +245,8 @@ type Client struct {
 	UserAgent string
 	// disable automatic RTCP sender reports.
 	DisableRTCPSenderReports bool
+	// explicitly request back channels to the server.
+	RequestBackChannels bool
 	// pointer to a variable that stores received bytes.
 	BytesReceived *uint64
 	// pointer to a variable that stores sent bytes.
@@ -288,7 +289,7 @@ type Client struct {
 	receiverReportPeriod time.Duration
 	checkTimeoutPeriod   time.Duration
 
-	connURL              *url.URL
+	connURL              *base.URL
 	ctx                  context.Context
 	ctxCancel            func()
 	state                clientState
@@ -299,9 +300,11 @@ type Client struct {
 	cseq                 int
 	optionsSent          bool
 	useGetParameter      bool
-	lastDescribeURL      *url.URL
-	baseURL              *url.URL
+	lastDescribeURL      *base.URL
+	baseURL              *base.URL
 	effectiveTransport   *Transport
+	backChannelSetupped  bool
+	stdChannelSetupped   bool
 	medias               map[*description.Media]*clientMedia
 	tcpCallbackByChannel map[int]readFunc
 	lastRange            *headers.Range
@@ -422,7 +425,7 @@ func (c *Client) Start(scheme string, host string) error {
 
 	ctx, ctxCancel := context.WithCancel(context.Background())
 
-	c.connURL = &url.URL{
+	c.connURL = &base.URL{
 		Scheme: scheme,
 		Host:   host,
 	}
@@ -450,7 +453,7 @@ func (c *Client) Start(scheme string, host string) error {
 
 // StartRecording connects to the address and starts publishing given media.
 func (c *Client) StartRecording(address string, desc *description.Session) error {
-	u, err := url.Parse(address)
+	u, err := base.ParseURL(address)
 	if err != nil {
 		return err
 	}
@@ -663,9 +666,16 @@ func (c *Client) doClose() {
 	}
 
 	if c.nconn != nil && c.baseURL != nil {
+		header := base.Header{}
+
+		if c.backChannelSetupped {
+			header["Require"] = base.HeaderValue{"www.onvif.org/ver20/backchannel"}
+		}
+
 		c.do(&base.Request{ //nolint:errcheck
 			Method: base.Teardown,
 			URL:    c.baseURL,
+			Header: header,
 		}, true)
 	}
 
@@ -697,6 +707,8 @@ func (c *Client) reset() {
 	c.useGetParameter = false
 	c.baseURL = nil
 	c.effectiveTransport = nil
+	c.backChannelSetupped = false
+	c.stdChannelSetupped = false
 	c.medias = nil
 	c.tcpCallbackByChannel = nil
 }
@@ -755,7 +767,7 @@ func (c *Client) trySwitchingProtocol() error {
 	return nil
 }
 
-func (c *Client) trySwitchingProtocol2(medi *description.Media, baseURL *url.URL) (*base.Response, error) {
+func (c *Client) trySwitchingProtocol2(medi *description.Media, baseURL *base.URL) (*base.Response, error) {
 	c.OnTransportSwitch(liberrors.ErrClientSwitchToTCP2{})
 
 	prevConnURL := c.connURL
@@ -777,13 +789,13 @@ func (c *Client) trySwitchingProtocol2(medi *description.Media, baseURL *url.URL
 
 func (c *Client) startReadRoutines() {
 	// allocate writer here because it's needed by RTCP receiver / sender
-	if c.state == clientStatePlay {
+	if c.state == clientStateRecord || c.backChannelSetupped {
+		c.writer.allocateBuffer(c.WriteQueueSize)
+	} else {
 		// when reading, buffer is only used to send RTCP receiver reports,
 		// that are much smaller than RTP packets and are sent at a fixed interval.
 		// decrease RAM consumption by allocating less buffers.
 		c.writer.allocateBuffer(8)
-	} else {
-		c.writer.allocateBuffer(c.WriteQueueSize)
 	}
 
 	c.timeDecoder = rtptime.NewGlobalDecoder()
@@ -792,7 +804,7 @@ func (c *Client) startReadRoutines() {
 		cm.start()
 	}
 
-	if c.state == clientStatePlay {
+	if c.state == clientStatePlay && c.stdChannelSetupped {
 		c.keepaliveTimer = time.NewTimer(c.keepalivePeriod)
 
 		switch *c.effectiveTransport {
@@ -992,7 +1004,7 @@ func (c *Client) isInTCPTimeout() bool {
 func (c *Client) doCheckTimeout() error {
 	if *c.effectiveTransport == TransportUDP ||
 		*c.effectiveTransport == TransportUDPMulticast {
-		if c.checkTimeoutInitial {
+		if c.checkTimeoutInitial && !c.backChannelSetupped {
 			c.checkTimeoutInitial = false
 
 			if c.atLeastOneUDPPacketHasBeenReceived() {
@@ -1027,7 +1039,7 @@ func (c *Client) doKeepAlive() error {
 	return err
 }
 
-func (c *Client) doOptions(u *url.URL) (*base.Response, error) {
+func (c *Client) doOptions(u *base.URL) (*base.Response, error) {
 	err := c.checkState(map[clientState]struct{}{
 		clientStateInitial:   {},
 		clientStatePrePlay:   {},
@@ -1066,7 +1078,7 @@ func (c *Client) doOptions(u *url.URL) (*base.Response, error) {
 }
 
 // Options sends an OPTIONS request.
-func (c *Client) Options(u *url.URL) (*base.Response, error) {
+func (c *Client) Options(u *base.URL) (*base.Response, error) {
 	cres := make(chan clientRes)
 	select {
 	case c.chOptions <- optionsReq{url: u, res: cres}:
@@ -1078,7 +1090,7 @@ func (c *Client) Options(u *url.URL) (*base.Response, error) {
 	}
 }
 
-func (c *Client) doDescribe(u *url.URL) (*description.Session, *base.Response, error) {
+func (c *Client) doDescribe(u *base.URL) (*description.Session, *base.Response, error) {
 	err := c.checkState(map[clientState]struct{}{
 		clientStateInitial:   {},
 		clientStatePrePlay:   {},
@@ -1093,12 +1105,18 @@ func (c *Client) doDescribe(u *url.URL) (*description.Session, *base.Response, e
 		return nil, nil, err
 	}
 
+	header := base.Header{
+		"Accept": base.HeaderValue{"application/sdp"},
+	}
+
+	if c.RequestBackChannels {
+		header["Require"] = base.HeaderValue{"www.onvif.org/ver20/backchannel"}
+	}
+
 	res, err := c.do(&base.Request{
 		Method: base.Describe,
 		URL:    u,
-		Header: base.Header{
-			"Accept": base.HeaderValue{"application/sdp"},
-		},
+		Header: header,
 	}, false)
 	if err != nil {
 		return nil, nil, err
@@ -1111,7 +1129,7 @@ func (c *Client) doDescribe(u *url.URL) (*description.Session, *base.Response, e
 			len(res.Header["Location"]) == 1 {
 			c.reset()
 
-			ru, err := url.Parse(res.Header["Location"][0])
+			ru, err := base.ParseURL(res.Header["Location"][0])
 			if err != nil {
 				return nil, nil, err
 			}
@@ -1120,7 +1138,7 @@ func (c *Client) doDescribe(u *url.URL) (*description.Session, *base.Response, e
 				ru.User = u.User
 			}
 
-			c.connURL = &url.URL{
+			c.connURL = &base.URL{
 				Scheme: ru.Scheme,
 				Host:   ru.Host,
 			}
@@ -1167,7 +1185,7 @@ func (c *Client) doDescribe(u *url.URL) (*description.Session, *base.Response, e
 }
 
 // Describe sends a DESCRIBE request.
-func (c *Client) Describe(u *url.URL) (*description.Session, *base.Response, error) {
+func (c *Client) Describe(u *base.URL) (*description.Session, *base.Response, error) {
 	cres := make(chan clientRes)
 	select {
 	case c.chDescribe <- describeReq{url: u, res: cres}:
@@ -1179,7 +1197,7 @@ func (c *Client) Describe(u *url.URL) (*description.Session, *base.Response, err
 	}
 }
 
-func (c *Client) doAnnounce(u *url.URL, desc *description.Session) (*base.Response, error) {
+func (c *Client) doAnnounce(u *base.URL, desc *description.Session) (*base.Response, error) {
 	err := c.checkState(map[clientState]struct{}{
 		clientStateInitial: {},
 	})
@@ -1224,7 +1242,7 @@ func (c *Client) doAnnounce(u *url.URL, desc *description.Session) (*base.Respon
 }
 
 // Announce sends an ANNOUNCE request.
-func (c *Client) Announce(u *url.URL, desc *description.Session) (*base.Response, error) {
+func (c *Client) Announce(u *base.URL, desc *description.Session) (*base.Response, error) {
 	cres := make(chan clientRes)
 	select {
 	case c.chAnnounce <- announceReq{url: u, desc: desc, res: cres}:
@@ -1237,7 +1255,7 @@ func (c *Client) Announce(u *url.URL, desc *description.Session) (*base.Response
 }
 
 func (c *Client) doSetup(
-	baseURL *url.URL,
+	baseURL *base.URL,
 	medi *description.Media,
 	rtpPort int,
 	rtcpPort int,
@@ -1335,12 +1353,18 @@ func (c *Client) doSetup(
 		return nil, err
 	}
 
+	header := base.Header{
+		"Transport": th.Marshal(),
+	}
+
+	if medi.IsBackChannel {
+		header["Require"] = base.HeaderValue{"www.onvif.org/ver20/backchannel"}
+	}
+
 	res, err := c.do(&base.Request{
 		Method: base.Setup,
 		URL:    mediaURL,
-		Header: base.Header{
-			"Transport": th.Marshal(),
-		},
+		Header: header,
 	}, false)
 	if err != nil {
 		cm.close()
@@ -1510,6 +1534,12 @@ func (c *Client) doSetup(
 	c.baseURL = baseURL
 	c.effectiveTransport = &desiredTransport
 
+	if medi.IsBackChannel {
+		c.backChannelSetupped = true
+	} else {
+		c.stdChannelSetupped = true
+	}
+
 	if c.state == clientStateInitial {
 		c.state = clientStatePrePlay
 	}
@@ -1538,7 +1568,7 @@ func (c *Client) findFreeChannelPair() int {
 // rtpPort and rtcpPort are used only if transport is UDP.
 // if rtpPort and rtcpPort are zero, they are chosen automatically.
 func (c *Client) Setup(
-	baseURL *url.URL,
+	baseURL *base.URL,
 	media *description.Media,
 	rtpPort int,
 	rtcpPort int,
@@ -1561,7 +1591,7 @@ func (c *Client) Setup(
 }
 
 // SetupAll setups all the given medias.
-func (c *Client) SetupAll(baseURL *url.URL, medias []*description.Media) error {
+func (c *Client) SetupAll(baseURL *base.URL, medias []*description.Media) error {
 	for _, m := range medias {
 		_, err := c.Setup(baseURL, m, 0, 0)
 		if err != nil {
@@ -1591,12 +1621,18 @@ func (c *Client) doPlay(ra *headers.Range) (*base.Response, error) {
 		}
 	}
 
+	header := base.Header{
+		"Range": ra.Marshal(),
+	}
+
+	if c.backChannelSetupped {
+		header["Require"] = base.HeaderValue{"www.onvif.org/ver20/backchannel"}
+	}
+
 	res, err := c.do(&base.Request{
 		Method: base.Play,
 		URL:    c.baseURL,
-		Header: base.Header{
-			"Range": ra.Marshal(),
-		},
+		Header: header,
 	}, false)
 	if err != nil {
 		c.stopReadRoutines()

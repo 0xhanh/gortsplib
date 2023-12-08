@@ -21,11 +21,22 @@ import (
 	"github.com/bluenviron/gortsplib/v4/pkg/description"
 	"github.com/bluenviron/gortsplib/v4/pkg/format"
 	"github.com/bluenviron/gortsplib/v4/pkg/headers"
-	"github.com/bluenviron/gortsplib/v4/pkg/url"
 	"github.com/bluenviron/mediacommon/pkg/codecs/mpeg4audio"
 )
 
 func ipPtr(v net.IP) *net.IP {
+	return &v
+}
+
+func deliveryPtr(v headers.TransportDelivery) *headers.TransportDelivery {
+	return &v
+}
+
+func transportPtr(v Transport) *Transport {
+	return &v
+}
+
+func transportModePtr(v headers.TransportMode) *headers.TransportMode {
 	return &v
 }
 
@@ -61,7 +72,7 @@ func mustMarshalPacketRTCP(pkt rtcp.Packet) []byte {
 }
 
 func readAll(c *Client, ur string, cb func(*description.Media, format.Format, *rtp.Packet)) error {
-	u, err := url.Parse(ur)
+	u, err := base.ParseURL(ur)
 	if err != nil {
 		return err
 	}
@@ -187,10 +198,7 @@ func TestClientPlayFormats(t *testing.T) {
 			require.NoError(t, err)
 
 			th := headers.Transport{
-				Delivery: func() *headers.TransportDelivery {
-					v := headers.TransportDeliveryUnicast
-					return &v
-				}(),
+				Delivery:    deliveryPtr(headers.TransportDeliveryUnicast),
 				Protocol:    headers.TransportProtocolUDP,
 				ClientPorts: inTH.ClientPorts,
 				ServerPorts: &[2]int{34556 + i*2, 34557 + i*2},
@@ -503,7 +511,7 @@ func TestClientPlay(t *testing.T) {
 				}(),
 			}
 
-			u, err := url.Parse(scheme + "://" + listenIP + ":8554/test/stream?param=value")
+			u, err := base.ParseURL(scheme + "://" + listenIP + ":8554/test/stream?param=value")
 			require.NoError(t, err)
 
 			err = c.Start(u.Scheme, u.Host)
@@ -606,10 +614,7 @@ func TestClientPlayPartial(t *testing.T) {
 		require.Equal(t, &[2]int{0, 1}, inTH.InterleavedIDs)
 
 		th := headers.Transport{
-			Delivery: func() *headers.TransportDelivery {
-				v := headers.TransportDeliveryUnicast
-				return &v
-			}(),
+			Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
 			Protocol:       headers.TransportProtocolTCP,
 			InterleavedIDs: inTH.InterleavedIDs,
 		}
@@ -652,13 +657,10 @@ func TestClientPlayPartial(t *testing.T) {
 	packetRecv := make(chan struct{})
 
 	c := Client{
-		Transport: func() *Transport {
-			v := TransportTCP
-			return &v
-		}(),
+		Transport: transportPtr(TransportTCP),
 	}
 
-	u, err := url.Parse("rtsp://" + listenIP + ":8554/teststream")
+	u, err := base.ParseURL("rtsp://" + listenIP + ":8554/teststream")
 	require.NoError(t, err)
 
 	err = c.Start(u.Scheme, u.Host)
@@ -763,10 +765,7 @@ func TestClientPlayContentBase(t *testing.T) {
 				require.NoError(t, err)
 
 				th := headers.Transport{
-					Delivery: func() *headers.TransportDelivery {
-						v := headers.TransportDeliveryUnicast
-						return &v
-					}(),
+					Delivery:    deliveryPtr(headers.TransportDeliveryUnicast),
 					Protocol:    headers.TransportProtocolUDP,
 					ClientPorts: inTH.ClientPorts,
 					ServerPorts: &[2]int{34556, 34557},
@@ -886,11 +885,8 @@ func TestClientPlayAnyPort(t *testing.T) {
 					StatusCode: base.StatusOK,
 					Header: base.Header{
 						"Transport": headers.Transport{
-							Protocol: headers.TransportProtocolUDP,
-							Delivery: func() *headers.TransportDelivery {
-								v := headers.TransportDeliveryUnicast
-								return &v
-							}(),
+							Protocol:    headers.TransportProtocolUDP,
+							Delivery:    deliveryPtr(headers.TransportDeliveryUnicast),
 							ClientPorts: th.ClientPorts,
 							ServerPorts: func() *[2]int {
 								switch ca {
@@ -1043,11 +1039,8 @@ func TestClientPlayAutomaticProtocol(t *testing.T) {
 				StatusCode: base.StatusOK,
 				Header: base.Header{
 					"Transport": headers.Transport{
-						Protocol: headers.TransportProtocolTCP,
-						Delivery: func() *headers.TransportDelivery {
-							v := headers.TransportDeliveryUnicast
-							return &v
-						}(),
+						Protocol:       headers.TransportProtocolTCP,
+						Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
 						InterleavedIDs: &[2]int{0, 1},
 					}.Marshal(),
 				},
@@ -1147,11 +1140,8 @@ func TestClientPlayAutomaticProtocol(t *testing.T) {
 					StatusCode: base.StatusOK,
 					Header: base.Header{
 						"Transport": headers.Transport{
-							Protocol: headers.TransportProtocolTCP,
-							Delivery: func() *headers.TransportDelivery {
-								v := headers.TransportDeliveryUnicast
-								return &v
-							}(),
+							Protocol:       headers.TransportProtocolTCP,
+							Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
 							InterleavedIDs: &[2]int{0, 1},
 							ServerPorts:    &[2]int{12312, 12313},
 						}.Marshal(),
@@ -1221,11 +1211,8 @@ func TestClientPlayAutomaticProtocol(t *testing.T) {
 					StatusCode: base.StatusOK,
 					Header: base.Header{
 						"Transport": headers.Transport{
-							Protocol: headers.TransportProtocolTCP,
-							Delivery: func() *headers.TransportDelivery {
-								v := headers.TransportDeliveryUnicast
-								return &v
-							}(),
+							Protocol:       headers.TransportProtocolTCP,
+							Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
 							InterleavedIDs: &[2]int{0, 1},
 						}.Marshal(),
 					},
@@ -1346,10 +1333,7 @@ func TestClientPlayAutomaticProtocol(t *testing.T) {
 				require.NoError(t, err)
 
 				th := headers.Transport{
-					Delivery: func() *headers.TransportDelivery {
-						v := headers.TransportDeliveryUnicast
-						return &v
-					}(),
+					Delivery:    deliveryPtr(headers.TransportDeliveryUnicast),
 					Protocol:    headers.TransportProtocolUDP,
 					ServerPorts: &[2]int{34556, 34557},
 					ClientPorts: inTH.ClientPorts,
@@ -1446,10 +1430,7 @@ func TestClientPlayAutomaticProtocol(t *testing.T) {
 				require.NoError(t, err)
 
 				th := headers.Transport{
-					Delivery: func() *headers.TransportDelivery {
-						v := headers.TransportDeliveryUnicast
-						return &v
-					}(),
+					Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
 					Protocol:       headers.TransportProtocolTCP,
 					InterleavedIDs: inTH.InterleavedIDs,
 				}
@@ -1569,10 +1550,7 @@ func TestClientPlayDifferentInterleavedIDs(t *testing.T) {
 		require.NoError(t, err)
 
 		th := headers.Transport{
-			Delivery: func() *headers.TransportDelivery {
-				v := headers.TransportDeliveryUnicast
-				return &v
-			}(),
+			Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
 			Protocol:       headers.TransportProtocolTCP,
 			InterleavedIDs: &[2]int{1, 2}, // use odd value
 		}
@@ -1615,10 +1593,7 @@ func TestClientPlayDifferentInterleavedIDs(t *testing.T) {
 	packetRecv := make(chan struct{})
 
 	c := Client{
-		Transport: func() *Transport {
-			v := TransportTCP
-			return &v
-		}(),
+		Transport: transportPtr(TransportTCP),
 	}
 
 	err = readAll(&c, "rtsp://localhost:8554/teststream",
@@ -1765,11 +1740,8 @@ func TestClientPlayRedirect(t *testing.T) {
 						StatusCode: base.StatusOK,
 						Header: base.Header{
 							"Transport": headers.Transport{
-								Protocol: headers.TransportProtocolUDP,
-								Delivery: func() *headers.TransportDelivery {
-									v := headers.TransportDeliveryUnicast
-									return &v
-								}(),
+								Protocol:    headers.TransportProtocolUDP,
+								Delivery:    deliveryPtr(headers.TransportDeliveryUnicast),
 								ClientPorts: th.ClientPorts,
 								ServerPorts: &[2]int{34556, 34557},
 							}.Marshal(),
@@ -1925,10 +1897,7 @@ func TestClientPlayPause(t *testing.T) {
 				require.NoError(t, err)
 
 				th := headers.Transport{
-					Delivery: func() *headers.TransportDelivery {
-						v := headers.TransportDeliveryUnicast
-						return &v
-					}(),
+					Delivery: deliveryPtr(headers.TransportDeliveryUnicast),
 				}
 
 				if transport == "udp" {
@@ -2103,11 +2072,8 @@ func TestClientPlayRTCPReport(t *testing.T) {
 			StatusCode: base.StatusOK,
 			Header: base.Header{
 				"Transport": headers.Transport{
-					Protocol: headers.TransportProtocolUDP,
-					Delivery: func() *headers.TransportDelivery {
-						v := headers.TransportDeliveryUnicast
-						return &v
-					}(),
+					Protocol:    headers.TransportProtocolUDP,
+					Delivery:    deliveryPtr(headers.TransportDeliveryUnicast),
 					ServerPorts: &[2]int{27556, 27557},
 					ClientPorts: inTH.ClientPorts,
 				}.Marshal(),
@@ -2265,10 +2231,7 @@ func TestClientPlayErrorTimeout(t *testing.T) {
 				require.NoError(t, err)
 
 				th := headers.Transport{
-					Delivery: func() *headers.TransportDelivery {
-						v := headers.TransportDeliveryUnicast
-						return &v
-					}(),
+					Delivery: deliveryPtr(headers.TransportDeliveryUnicast),
 				}
 
 				var l1 net.PacketConn
@@ -2411,10 +2374,7 @@ func TestClientPlayIgnoreTCPInvalidMedia(t *testing.T) {
 		require.NoError(t, err)
 
 		th := headers.Transport{
-			Delivery: func() *headers.TransportDelivery {
-				v := headers.TransportDeliveryUnicast
-				return &v
-			}(),
+			Delivery: deliveryPtr(headers.TransportDeliveryUnicast),
 		}
 		th.Protocol = headers.TransportProtocolTCP
 		th.InterleavedIDs = inTH.InterleavedIDs
@@ -2461,10 +2421,7 @@ func TestClientPlayIgnoreTCPInvalidMedia(t *testing.T) {
 	recv := make(chan struct{})
 
 	c := Client{
-		Transport: func() *Transport {
-			v := TransportTCP
-			return &v
-		}(),
+		Transport: transportPtr(TransportTCP),
 	}
 
 	err = readAll(&c, "rtsp://localhost:8554/teststream",
@@ -2533,10 +2490,7 @@ func TestClientPlaySeek(t *testing.T) {
 		require.NoError(t, err)
 
 		th := headers.Transport{
-			Delivery: func() *headers.TransportDelivery {
-				v := headers.TransportDeliveryUnicast
-				return &v
-			}(),
+			Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
 			Protocol:       headers.TransportProtocolTCP,
 			InterleavedIDs: inTH.InterleavedIDs,
 		}
@@ -2604,13 +2558,10 @@ func TestClientPlaySeek(t *testing.T) {
 	}()
 
 	c := Client{
-		Transport: func() *Transport {
-			v := TransportTCP
-			return &v
-		}(),
+		Transport: transportPtr(TransportTCP),
 	}
 
-	u, err := url.Parse("rtsp://localhost:8554/teststream")
+	u, err := base.ParseURL("rtsp://localhost:8554/teststream")
 	require.NoError(t, err)
 
 	err = c.Start(u.Scheme, u.Host)
@@ -2702,11 +2653,8 @@ func TestClientPlayKeepalive(t *testing.T) {
 					Header: base.Header{
 						"CSeq": req.Header["CSeq"],
 						"Transport": headers.Transport{
-							Protocol: headers.TransportProtocolTCP,
-							Delivery: func() *headers.TransportDelivery {
-								v := headers.TransportDeliveryUnicast
-								return &v
-							}(),
+							Protocol:       headers.TransportProtocolTCP,
+							Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
 							InterleavedIDs: &[2]int{0, 1},
 						}.Marshal(),
 						"Session": headers.Session{
@@ -2873,10 +2821,7 @@ func TestClientPlayDifferentSource(t *testing.T) {
 		require.NoError(t, err)
 
 		th := headers.Transport{
-			Delivery: func() *headers.TransportDelivery {
-				v := headers.TransportDeliveryUnicast
-				return &v
-			}(),
+			Delivery:    deliveryPtr(headers.TransportDeliveryUnicast),
 			Protocol:    headers.TransportProtocolUDP,
 			ClientPorts: inTH.ClientPorts,
 			ServerPorts: &[2]int{34556, 34557},
@@ -2928,10 +2873,7 @@ func TestClientPlayDifferentSource(t *testing.T) {
 	}()
 
 	c := Client{
-		Transport: func() *Transport {
-			v := TransportUDP
-			return &v
-		}(),
+		Transport: transportPtr(TransportUDP),
 	}
 
 	err = readAll(&c, "rtsp://localhost:8554/test/stream?param=value",
@@ -3027,10 +2969,7 @@ func TestClientPlayDecodeErrors(t *testing.T) {
 				require.NoError(t, err)
 
 				th := headers.Transport{
-					Delivery: func() *headers.TransportDelivery {
-						v := headers.TransportDeliveryUnicast
-						return &v
-					}(),
+					Delivery: deliveryPtr(headers.TransportDeliveryUnicast),
 				}
 
 				if ca.proto == "udp" {
@@ -3295,11 +3234,8 @@ func TestClientPlayPacketNTP(t *testing.T) {
 			StatusCode: base.StatusOK,
 			Header: base.Header{
 				"Transport": headers.Transport{
-					Protocol: headers.TransportProtocolUDP,
-					Delivery: func() *headers.TransportDelivery {
-						v := headers.TransportDeliveryUnicast
-						return &v
-					}(),
+					Protocol:    headers.TransportProtocolUDP,
+					Delivery:    deliveryPtr(headers.TransportDeliveryUnicast),
 					ServerPorts: &[2]int{27556, 27557},
 					ClientPorts: inTH.ClientPorts,
 				}.Marshal(),
@@ -3398,6 +3334,192 @@ func TestClientPlayPacketNTP(t *testing.T) {
 		})
 	require.NoError(t, err)
 	defer c.Close()
+
+	<-recv
+}
+
+func TestClientPlayBackChannel(t *testing.T) {
+	l, err := net.Listen("tcp", "localhost:8554")
+	require.NoError(t, err)
+	defer l.Close()
+
+	serverDone := make(chan struct{})
+	defer func() { <-serverDone }()
+
+	go func() {
+		defer close(serverDone)
+
+		nconn, err := l.Accept()
+		require.NoError(t, err)
+		defer nconn.Close()
+		conn := conn.NewConn(nconn)
+
+		req, err := conn.ReadRequest()
+		require.NoError(t, err)
+		require.Equal(t, base.Options, req.Method)
+
+		err = conn.WriteResponse(&base.Response{
+			StatusCode: base.StatusOK,
+			Header: base.Header{
+				"Public": base.HeaderValue{strings.Join([]string{
+					string(base.Describe),
+					string(base.Setup),
+					string(base.Play),
+				}, ", ")},
+			},
+		})
+		require.NoError(t, err)
+
+		req, err = conn.ReadRequest()
+		require.NoError(t, err)
+		require.Equal(t, base.Describe, req.Method)
+		require.Equal(t, base.HeaderValue{"www.onvif.org/ver20/backchannel"}, req.Header["Require"])
+
+		err = conn.WriteResponse(&base.Response{
+			StatusCode: base.StatusOK,
+			Header: base.Header{
+				"Content-Type": base.HeaderValue{"application/sdp"},
+				"Content-Base": base.HeaderValue{"rtsp://localhost:8554/teststream/"},
+			},
+			Body: mediasToSDP([]*description.Media{
+				testH264Media,
+				{
+					Type:          description.MediaTypeAudio,
+					Formats:       []format.Format{&format.G711{}},
+					IsBackChannel: true,
+				},
+			}),
+		})
+		require.NoError(t, err)
+
+		req, err = conn.ReadRequest()
+		require.NoError(t, err)
+		require.Equal(t, base.Setup, req.Method)
+		require.Equal(t, base.HeaderValue(nil), req.Header["Require"])
+
+		var inTH headers.Transport
+		err = inTH.Unmarshal(req.Header["Transport"])
+		require.NoError(t, err)
+
+		th := headers.Transport{
+			Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+			Protocol:       headers.TransportProtocolTCP,
+			InterleavedIDs: inTH.InterleavedIDs,
+		}
+
+		err = conn.WriteResponse(&base.Response{
+			StatusCode: base.StatusOK,
+			Header: base.Header{
+				"Transport": th.Marshal(),
+			},
+		})
+		require.NoError(t, err)
+
+		req, err = conn.ReadRequest()
+		require.NoError(t, err)
+		require.Equal(t, base.Setup, req.Method)
+		require.Equal(t, base.HeaderValue{"www.onvif.org/ver20/backchannel"}, req.Header["Require"])
+
+		err = inTH.Unmarshal(req.Header["Transport"])
+		require.NoError(t, err)
+
+		th = headers.Transport{
+			Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+			Protocol:       headers.TransportProtocolTCP,
+			InterleavedIDs: inTH.InterleavedIDs,
+		}
+
+		err = conn.WriteResponse(&base.Response{
+			StatusCode: base.StatusOK,
+			Header: base.Header{
+				"Transport": th.Marshal(),
+			},
+		})
+		require.NoError(t, err)
+
+		req, err = conn.ReadRequest()
+		require.NoError(t, err)
+		require.Equal(t, base.Play, req.Method)
+		require.Equal(t, base.HeaderValue{"www.onvif.org/ver20/backchannel"}, req.Header["Require"])
+
+		err = conn.WriteResponse(&base.Response{
+			StatusCode: base.StatusOK,
+		})
+		require.NoError(t, err)
+
+		f, err := conn.ReadInterleavedFrame()
+		require.NoError(t, err)
+		require.Equal(t, 2, f.Channel)
+
+		f, err = conn.ReadInterleavedFrame()
+		require.NoError(t, err)
+		require.Equal(t, 3, f.Channel)
+
+		packets, err := rtcp.Unmarshal(f.Payload)
+		require.NoError(t, err)
+
+		sr, ok := packets[0].(*rtcp.SenderReport)
+		require.Equal(t, true, ok)
+		require.Equal(t, uint32(0x38F27A2F), sr.SSRC)
+		require.Equal(t, uint32(1), sr.PacketCount)
+		require.Equal(t, uint32(4), sr.OctetCount)
+
+		err = conn.WriteInterleavedFrame(&base.InterleavedFrame{
+			Channel: 0,
+			Payload: testRTPPacketMarshaled,
+		}, make([]byte, 1024))
+		require.NoError(t, err)
+
+		req, err = conn.ReadRequest()
+		require.NoError(t, err)
+		require.Equal(t, base.Teardown, req.Method)
+		require.Equal(t, base.HeaderValue{"www.onvif.org/ver20/backchannel"}, req.Header["Require"])
+
+		err = conn.WriteResponse(&base.Response{
+			StatusCode: base.StatusOK,
+		})
+		require.NoError(t, err)
+	}()
+
+	c := Client{
+		RequestBackChannels:  true,
+		Transport:            transportPtr(TransportTCP),
+		senderReportPeriod:   500 * time.Millisecond,
+		receiverReportPeriod: 750 * time.Millisecond,
+	}
+
+	u, err := base.ParseURL("rtsp://localhost:8554/teststream")
+	require.NoError(t, err)
+
+	err = c.Start(u.Scheme, u.Host)
+	require.NoError(t, err)
+	defer c.Close()
+
+	sd, _, err := c.Describe(u)
+	require.NoError(t, err)
+
+	err = c.SetupAll(sd.BaseURL, sd.Medias)
+	require.NoError(t, err)
+
+	recv := make(chan struct{})
+
+	c.OnPacketRTP(sd.Medias[0], sd.Medias[0].Formats[0], func(pkt *rtp.Packet) {
+		close(recv)
+	})
+
+	_, err = c.Play(nil)
+	require.NoError(t, err)
+
+	err = c.WritePacketRTP(sd.Medias[1], &rtp.Packet{
+		Header: rtp.Header{
+			Version:     2,
+			PayloadType: 8,
+			CSRC:        []uint32{},
+			SSRC:        0x38F27A2F,
+		},
+		Payload: []byte{1, 2, 3, 4},
+	})
+	require.NoError(t, err)
 
 	<-recv
 }

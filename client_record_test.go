@@ -20,7 +20,6 @@ import (
 	"github.com/bluenviron/gortsplib/v4/pkg/format"
 	"github.com/bluenviron/gortsplib/v4/pkg/headers"
 	"github.com/bluenviron/gortsplib/v4/pkg/sdp"
-	"github.com/bluenviron/gortsplib/v4/pkg/url"
 )
 
 var testH264Media = &description.Media{
@@ -74,7 +73,7 @@ func ntpTimeGoToRTCP(v time.Time) uint64 {
 }
 
 func record(c *Client, ur string, medias []*description.Media, cb func(*description.Media, rtcp.Packet)) error {
-	u, err := url.Parse(ur)
+	u, err := base.ParseURL(ur)
 	if err != nil {
 		return err
 	}
@@ -213,10 +212,7 @@ func TestClientRecordSerial(t *testing.T) {
 				}
 
 				th := headers.Transport{
-					Delivery: func() *headers.TransportDelivery {
-						v := headers.TransportDeliveryUnicast
-						return &v
-					}(),
+					Delivery: deliveryPtr(headers.TransportDeliveryUnicast),
 				}
 
 				if transport == "udp" {
@@ -405,10 +401,7 @@ func TestClientRecordParallel(t *testing.T) {
 				require.NoError(t, err)
 
 				th := headers.Transport{
-					Delivery: func() *headers.TransportDelivery {
-						v := headers.TransportDeliveryUnicast
-						return &v
-					}(),
+					Delivery: deliveryPtr(headers.TransportDeliveryUnicast),
 				}
 
 				if transport == "udp" {
@@ -545,10 +538,7 @@ func TestClientRecordPauseSerial(t *testing.T) {
 				require.NoError(t, err)
 
 				th := headers.Transport{
-					Delivery: func() *headers.TransportDelivery {
-						v := headers.TransportDeliveryUnicast
-						return &v
-					}(),
+					Delivery: deliveryPtr(headers.TransportDeliveryUnicast),
 				}
 
 				if transport == "udp" {
@@ -693,10 +683,7 @@ func TestClientRecordPauseParallel(t *testing.T) {
 				require.NoError(t, err)
 
 				th := headers.Transport{
-					Delivery: func() *headers.TransportDelivery {
-						v := headers.TransportDeliveryUnicast
-						return &v
-					}(),
+					Delivery: deliveryPtr(headers.TransportDeliveryUnicast),
 				}
 
 				if transport == "udp" {
@@ -841,10 +828,7 @@ func TestClientRecordAutomaticProtocol(t *testing.T) {
 		require.Equal(t, headers.TransportProtocolTCP, inTH.Protocol)
 
 		th := headers.Transport{
-			Delivery: func() *headers.TransportDelivery {
-				v := headers.TransportDeliveryUnicast
-				return &v
-			}(),
+			Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
 			Protocol:       headers.TransportProtocolTCP,
 			InterleavedIDs: &[2]int{0, 1},
 		}
@@ -963,10 +947,7 @@ func TestClientRecordDecodeErrors(t *testing.T) {
 				require.NoError(t, err)
 
 				th := headers.Transport{
-					Delivery: func() *headers.TransportDelivery {
-						v := headers.TransportDeliveryUnicast
-						return &v
-					}(),
+					Delivery: deliveryPtr(headers.TransportDeliveryUnicast),
 				}
 
 				if ca.proto == "udp" {
@@ -1136,10 +1117,7 @@ func TestClientRecordRTCPReport(t *testing.T) {
 				require.NoError(t, err)
 
 				th := headers.Transport{
-					Delivery: func() *headers.TransportDelivery {
-						v := headers.TransportDeliveryUnicast
-						return &v
-					}(),
+					Delivery: deliveryPtr(headers.TransportDeliveryUnicast),
 				}
 
 				if ca == "udp" {
@@ -1320,10 +1298,7 @@ func TestClientRecordIgnoreTCPRTPPackets(t *testing.T) {
 		require.NoError(t, err)
 
 		th := headers.Transport{
-			Delivery: func() *headers.TransportDelivery {
-				v := headers.TransportDeliveryUnicast
-				return &v
-			}(),
+			Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
 			Protocol:       headers.TransportProtocolTCP,
 			InterleavedIDs: inTH.InterleavedIDs,
 		}
@@ -1370,10 +1345,7 @@ func TestClientRecordIgnoreTCPRTPPackets(t *testing.T) {
 	rtcpReceived := make(chan struct{})
 
 	c := Client{
-		Transport: func() *Transport {
-			v := TransportTCP
-			return &v
-		}(),
+		Transport: transportPtr(TransportTCP),
 	}
 
 	medias := []*description.Media{testH264Media}

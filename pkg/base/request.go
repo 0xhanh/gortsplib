@@ -5,8 +5,6 @@ import (
 	"bufio"
 	"fmt"
 	"strconv"
-
-	"github.com/bluenviron/gortsplib/v4/pkg/url"
 )
 
 const (
@@ -45,7 +43,7 @@ type Request struct {
 	Method Method
 
 	// request url
-	URL *url.URL
+	URL *URL
 
 	// tunnel:
 	Protocol string
@@ -76,7 +74,7 @@ func (req *Request) Unmarshal(br *bufio.Reader) error {
 	rawURL := string(byts[:len(byts)-1])
 
 	if rawURL != "*" {
-		ur, err := url.Parse(rawURL)
+		ur, err := ParseURL(rawURL)
 		if err != nil {
 			return fmt.Errorf("invalid URL (%v)", rawURL)
 		}

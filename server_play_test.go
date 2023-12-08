@@ -23,7 +23,6 @@ import (
 	"github.com/bluenviron/gortsplib/v4/pkg/format"
 	"github.com/bluenviron/gortsplib/v4/pkg/headers"
 	"github.com/bluenviron/gortsplib/v4/pkg/sdp"
-	"github.com/bluenviron/gortsplib/v4/pkg/url"
 )
 
 func uintPtr(v uint) *uint {
@@ -273,15 +272,9 @@ func TestServerPlayPath(t *testing.T) {
 			desc := doDescribe(t, conn)
 
 			th := &headers.Transport{
-				Protocol: headers.TransportProtocolTCP,
-				Delivery: func() *headers.TransportDelivery {
-					v := headers.TransportDeliveryUnicast
-					return &v
-				}(),
-				Mode: func() *headers.TransportMode {
-					v := headers.TransportModePlay
-					return &v
-				}(),
+				Protocol:       headers.TransportProtocolTCP,
+				Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+				Mode:           transportModePtr(headers.TransportModePlay),
 				InterleavedIDs: &[2]int{0, 1},
 			}
 
@@ -355,15 +348,9 @@ func TestServerPlaySetupErrors(t *testing.T) {
 			desc := doDescribe(t, conn)
 
 			th := &headers.Transport{
-				Protocol: headers.TransportProtocolTCP,
-				Delivery: func() *headers.TransportDelivery {
-					v := headers.TransportDeliveryUnicast
-					return &v
-				}(),
-				Mode: func() *headers.TransportMode {
-					v := headers.TransportModePlay
-					return &v
-				}(),
+				Protocol:       headers.TransportProtocolTCP,
+				Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+				Mode:           transportModePtr(headers.TransportModePlay),
 				InterleavedIDs: &[2]int{0, 1},
 			}
 
@@ -476,14 +463,8 @@ func TestServerPlaySetupErrorSameUDPPortsAndIP(t *testing.T) {
 		conn := conn.NewConn(nconn)
 
 		inTH := &headers.Transport{
-			Delivery: func() *headers.TransportDelivery {
-				v := headers.TransportDeliveryUnicast
-				return &v
-			}(),
-			Mode: func() *headers.TransportMode {
-				v := headers.TransportModePlay
-				return &v
-			}(),
+			Delivery:    deliveryPtr(headers.TransportDeliveryUnicast),
+			Mode:        transportModePtr(headers.TransportModePlay),
 			Protocol:    headers.TransportProtocolUDP,
 			ClientPorts: &[2]int{35466, 35467},
 		}
@@ -651,10 +632,7 @@ func TestServerPlay(t *testing.T) {
 			desc := doDescribe(t, conn)
 
 			inTH := &headers.Transport{
-				Mode: func() *headers.TransportMode {
-					v := headers.TransportModePlay
-					return &v
-				}(),
+				Mode: transportModePtr(headers.TransportModePlay),
 			}
 
 			switch transport {
@@ -673,7 +651,7 @@ func TestServerPlay(t *testing.T) {
 				v := headers.TransportDeliveryUnicast
 				inTH.Delivery = &v
 				inTH.Protocol = headers.TransportProtocolTCP
-				inTH.InterleavedIDs = &[2]int{5, 6} // off value
+				inTH.InterleavedIDs = &[2]int{5, 6} // odd value
 			}
 
 			res, th := doSetup(t, conn, absoluteControlAttribute(desc.MediaDescriptions[0]), inTH, "")
@@ -921,14 +899,8 @@ func TestServerPlayDecodeErrors(t *testing.T) {
 			desc := doDescribe(t, conn)
 
 			inTH := &headers.Transport{
-				Mode: func() *headers.TransportMode {
-					v := headers.TransportModePlay
-					return &v
-				}(),
-				Delivery: func() *headers.TransportDelivery {
-					v := headers.TransportDeliveryUnicast
-					return &v
-				}(),
+				Mode:     transportModePtr(headers.TransportModePlay),
+				Delivery: deliveryPtr(headers.TransportDeliveryUnicast),
 			}
 
 			if ca.proto == "udp" {
@@ -1045,14 +1017,8 @@ func TestServerPlayRTCPReport(t *testing.T) {
 			desc := doDescribe(t, conn)
 
 			inTH := &headers.Transport{
-				Mode: func() *headers.TransportMode {
-					v := headers.TransportModePlay
-					return &v
-				}(),
-				Delivery: func() *headers.TransportDelivery {
-					v := headers.TransportDeliveryUnicast
-					return &v
-				}(),
+				Mode:     transportModePtr(headers.TransportModePlay),
+				Delivery: deliveryPtr(headers.TransportDeliveryUnicast),
 			}
 
 			if ca == "udp" {
@@ -1250,15 +1216,9 @@ func TestServerPlayTCPResponseBeforeFrames(t *testing.T) {
 	desc := doDescribe(t, conn)
 
 	inTH := &headers.Transport{
-		Protocol: headers.TransportProtocolTCP,
-		Delivery: func() *headers.TransportDelivery {
-			v := headers.TransportDeliveryUnicast
-			return &v
-		}(),
-		Mode: func() *headers.TransportMode {
-			v := headers.TransportModePlay
-			return &v
-		}(),
+		Protocol:       headers.TransportProtocolTCP,
+		Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+		Mode:           transportModePtr(headers.TransportModePlay),
 		InterleavedIDs: &[2]int{0, 1},
 	}
 
@@ -1313,15 +1273,9 @@ func TestServerPlayPlayPlay(t *testing.T) {
 	desc := doDescribe(t, conn)
 
 	inTH := &headers.Transport{
-		Protocol: headers.TransportProtocolUDP,
-		Delivery: func() *headers.TransportDelivery {
-			v := headers.TransportDeliveryUnicast
-			return &v
-		}(),
-		Mode: func() *headers.TransportMode {
-			v := headers.TransportModePlay
-			return &v
-		}(),
+		Protocol:    headers.TransportProtocolUDP,
+		Delivery:    deliveryPtr(headers.TransportDeliveryUnicast),
+		Mode:        transportModePtr(headers.TransportModePlay),
 		ClientPorts: &[2]int{30450, 30451},
 	}
 
@@ -1404,15 +1358,9 @@ func TestServerPlayPlayPausePlay(t *testing.T) {
 	desc := doDescribe(t, conn)
 
 	inTH := &headers.Transport{
-		Protocol: headers.TransportProtocolTCP,
-		Delivery: func() *headers.TransportDelivery {
-			v := headers.TransportDeliveryUnicast
-			return &v
-		}(),
-		Mode: func() *headers.TransportMode {
-			v := headers.TransportModePlay
-			return &v
-		}(),
+		Protocol:       headers.TransportProtocolTCP,
+		Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+		Mode:           transportModePtr(headers.TransportModePlay),
 		InterleavedIDs: &[2]int{0, 1},
 	}
 
@@ -1492,15 +1440,9 @@ func TestServerPlayPlayPausePause(t *testing.T) {
 	desc := doDescribe(t, conn)
 
 	inTH := &headers.Transport{
-		Protocol: headers.TransportProtocolTCP,
-		Delivery: func() *headers.TransportDelivery {
-			v := headers.TransportDeliveryUnicast
-			return &v
-		}(),
-		Mode: func() *headers.TransportMode {
-			v := headers.TransportModePlay
-			return &v
-		}(),
+		Protocol:       headers.TransportProtocolTCP,
+		Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+		Mode:           transportModePtr(headers.TransportModePlay),
 		InterleavedIDs: &[2]int{0, 1},
 	}
 
@@ -1578,10 +1520,7 @@ func TestServerPlayTimeout(t *testing.T) {
 			desc := doDescribe(t, conn)
 
 			inTH := &headers.Transport{
-				Mode: func() *headers.TransportMode {
-					v := headers.TransportModePlay
-					return &v
-				}(),
+				Mode: transportModePtr(headers.TransportModePlay),
 			}
 
 			switch transport {
@@ -1667,14 +1606,8 @@ func TestServerPlayWithoutTeardown(t *testing.T) {
 			desc := doDescribe(t, conn)
 
 			inTH := &headers.Transport{
-				Delivery: func() *headers.TransportDelivery {
-					v := headers.TransportDeliveryUnicast
-					return &v
-				}(),
-				Mode: func() *headers.TransportMode {
-					v := headers.TransportModePlay
-					return &v
-				}(),
+				Delivery: deliveryPtr(headers.TransportDeliveryUnicast),
+				Mode:     transportModePtr(headers.TransportModePlay),
 			}
 
 			if transport == "udp" {
@@ -1748,14 +1681,8 @@ func TestServerPlayUDPChangeConn(t *testing.T) {
 		desc := doDescribe(t, conn)
 
 		inTH := &headers.Transport{
-			Delivery: func() *headers.TransportDelivery {
-				v := headers.TransportDeliveryUnicast
-				return &v
-			}(),
-			Mode: func() *headers.TransportMode {
-				v := headers.TransportModePlay
-				return &v
-			}(),
+			Delivery:    deliveryPtr(headers.TransportDeliveryUnicast),
+			Mode:        transportModePtr(headers.TransportModePlay),
 			Protocol:    headers.TransportProtocolUDP,
 			ClientPorts: &[2]int{35466, 35467},
 		}
@@ -1835,14 +1762,8 @@ func TestServerPlayPartialMedias(t *testing.T) {
 	desc := doDescribe(t, conn)
 
 	inTH := &headers.Transport{
-		Delivery: func() *headers.TransportDelivery {
-			v := headers.TransportDeliveryUnicast
-			return &v
-		}(),
-		Mode: func() *headers.TransportMode {
-			v := headers.TransportModePlay
-			return &v
-		}(),
+		Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+		Mode:           transportModePtr(headers.TransportModePlay),
 		Protocol:       headers.TransportProtocolTCP,
 		InterleavedIDs: &[2]int{4, 5},
 	}
@@ -1869,14 +1790,8 @@ func TestServerPlayAdditionalInfos(t *testing.T) {
 		desc := doDescribe(t, conn)
 
 		inTH := &headers.Transport{
-			Delivery: func() *headers.TransportDelivery {
-				v := headers.TransportDeliveryUnicast
-				return &v
-			}(),
-			Mode: func() *headers.TransportMode {
-				v := headers.TransportModePlay
-				return &v
-			}(),
+			Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+			Mode:           transportModePtr(headers.TransportModePlay),
 			Protocol:       headers.TransportProtocolTCP,
 			InterleavedIDs: &[2]int{0, 1},
 		}
@@ -1887,14 +1802,8 @@ func TestServerPlayAdditionalInfos(t *testing.T) {
 		ssrcs[0] = th.SSRC
 
 		inTH = &headers.Transport{
-			Delivery: func() *headers.TransportDelivery {
-				v := headers.TransportDeliveryUnicast
-				return &v
-			}(),
-			Mode: func() *headers.TransportMode {
-				v := headers.TransportModePlay
-				return &v
-			}(),
+			Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+			Mode:           transportModePtr(headers.TransportModePlay),
 			Protocol:       headers.TransportProtocolTCP,
 			InterleavedIDs: &[2]int{2, 3},
 		}
@@ -1978,7 +1887,7 @@ func TestServerPlayAdditionalInfos(t *testing.T) {
 	require.True(t, strings.HasPrefix(mustParseURL((*rtpInfo)[0].URL).Path, "/teststream/trackID="))
 	require.Equal(t, &headers.RTPInfo{
 		&headers.RTPInfoEntry{
-			URL: (&url.URL{
+			URL: (&base.URL{
 				Scheme: "rtsp",
 				Host:   "localhost:8554",
 				Path:   mustParseURL((*rtpInfo)[0].URL).Path,
@@ -2008,7 +1917,7 @@ func TestServerPlayAdditionalInfos(t *testing.T) {
 	require.True(t, strings.HasPrefix(mustParseURL((*rtpInfo)[0].URL).Path, "/teststream/trackID="))
 	require.Equal(t, &headers.RTPInfo{
 		&headers.RTPInfoEntry{
-			URL: (&url.URL{
+			URL: (&base.URL{
 				Scheme: "rtsp",
 				Host:   "localhost:8554",
 				Path:   mustParseURL((*rtpInfo)[0].URL).Path,
@@ -2017,7 +1926,7 @@ func TestServerPlayAdditionalInfos(t *testing.T) {
 			Timestamp:      (*rtpInfo)[0].Timestamp,
 		},
 		&headers.RTPInfoEntry{
-			URL: (&url.URL{
+			URL: (&base.URL{
 				Scheme: "rtsp",
 				Host:   "localhost:8554",
 				Path:   mustParseURL((*rtpInfo)[1].URL).Path,
@@ -2089,14 +1998,8 @@ func TestServerPlayNoInterleavedIDs(t *testing.T) {
 	desc := doDescribe(t, conn)
 
 	inTH := &headers.Transport{
-		Delivery: func() *headers.TransportDelivery {
-			v := headers.TransportDeliveryUnicast
-			return &v
-		}(),
-		Mode: func() *headers.TransportMode {
-			v := headers.TransportModePlay
-			return &v
-		}(),
+		Delivery: deliveryPtr(headers.TransportDeliveryUnicast),
+		Mode:     transportModePtr(headers.TransportModePlay),
 		Protocol: headers.TransportProtocolTCP,
 	}
 
@@ -2121,4 +2024,74 @@ func TestServerPlayNoInterleavedIDs(t *testing.T) {
 		require.Equal(t, i*2, f.Channel)
 		require.Equal(t, testRTPPacketMarshaled, f.Payload)
 	}
+}
+
+func TestServerPlayBytesSent(t *testing.T) {
+	var stream *ServerStream
+
+	s := &Server{
+		RTSPAddress:       "localhost:8554",
+		MulticastIPRange:  "224.1.0.0/16",
+		MulticastRTPPort:  8000,
+		MulticastRTCPPort: 8001,
+		Handler: &testServerHandler{
+			onDescribe: func(ctx *ServerHandlerOnDescribeCtx) (*base.Response, *ServerStream, error) {
+				return &base.Response{
+					StatusCode: base.StatusOK,
+				}, stream, nil
+			},
+			onSetup: func(ctx *ServerHandlerOnSetupCtx) (*base.Response, *ServerStream, error) {
+				return &base.Response{
+					StatusCode: base.StatusOK,
+				}, stream, nil
+			},
+			onPlay: func(ctx *ServerHandlerOnPlayCtx) (*base.Response, error) {
+				return &base.Response{
+					StatusCode: base.StatusOK,
+				}, nil
+			},
+		},
+	}
+
+	err := s.Start()
+	require.NoError(t, err)
+	defer s.Close()
+
+	stream = NewServerStream(s, &description.Session{Medias: []*description.Media{testH264Media}})
+	defer stream.Close()
+
+	for _, transport := range []string{"tcp", "multicast"} {
+		nconn, err := net.Dial("tcp", "localhost:8554")
+		require.NoError(t, err)
+		defer nconn.Close()
+		conn := conn.NewConn(nconn)
+
+		desc := doDescribe(t, conn)
+
+		inTH := &headers.Transport{
+			Mode: transportModePtr(headers.TransportModePlay),
+		}
+
+		if transport == "multicast" {
+			v := headers.TransportDeliveryMulticast
+			inTH.Delivery = &v
+			inTH.Protocol = headers.TransportProtocolUDP
+		} else {
+			v := headers.TransportDeliveryUnicast
+			inTH.Delivery = &v
+			inTH.Protocol = headers.TransportProtocolTCP
+			inTH.InterleavedIDs = &[2]int{0, 1}
+		}
+
+		res, _ := doSetup(t, conn, absoluteControlAttribute(desc.MediaDescriptions[0]), inTH, "")
+
+		session := readSession(t, res)
+
+		doPlay(t, conn, "rtsp://localhost:8554/teststream", session)
+	}
+
+	err = stream.WritePacketRTP(stream.Description().Medias[0], &testRTPPacket)
+	require.NoError(t, err)
+
+	require.Equal(t, uint64(16*2), stream.BytesSent())
 }

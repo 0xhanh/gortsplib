@@ -311,7 +311,40 @@ func TestServerErrorCSeqMissing(t *testing.T) {
 	res, err := writeReqReadRes(conn, base.Request{
 		Method: base.Options,
 		URL:    mustParseURL("rtsp://localhost:8554/"),
-		Header: base.Header{},
+	})
+	require.NoError(t, err)
+	require.Equal(t, base.StatusBadRequest, res.StatusCode)
+
+	<-nconnClosed
+}
+
+func TestServerErrorNilURL(t *testing.T) {
+	nconnClosed := make(chan struct{})
+
+	s := &Server{
+		Handler: &testServerHandler{
+			onConnClose: func(ctx *ServerHandlerOnConnCloseCtx) {
+				require.EqualError(t, ctx.Error, "invalid path")
+				close(nconnClosed)
+			},
+		},
+		RTSPAddress: "localhost:8554",
+	}
+	err := s.Start()
+	require.NoError(t, err)
+	defer s.Close()
+
+	nconn, err := net.Dial("tcp", "localhost:8554")
+	require.NoError(t, err)
+	defer nconn.Close()
+	conn := conn.NewConn(nconn)
+
+	res, err := writeReqReadRes(conn, base.Request{
+		Method: base.Describe,
+		URL:    nil,
+		Header: base.Header{
+			"CSeq": base.HeaderValue{"1"},
+		},
 	})
 	require.NoError(t, err)
 	require.Equal(t, base.StatusBadRequest, res.StatusCode)
@@ -369,15 +402,9 @@ func TestServerErrorMethodNotImplemented(t *testing.T) {
 
 			if ca == "inside session" {
 				inTH := &headers.Transport{
-					Protocol: headers.TransportProtocolTCP,
-					Delivery: func() *headers.TransportDelivery {
-						v := headers.TransportDeliveryUnicast
-						return &v
-					}(),
-					Mode: func() *headers.TransportMode {
-						v := headers.TransportModePlay
-						return &v
-					}(),
+					Protocol:       headers.TransportProtocolTCP,
+					Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+					Mode:           transportModePtr(headers.TransportModePlay),
 					InterleavedIDs: &[2]int{0, 1},
 				}
 
@@ -463,15 +490,9 @@ func TestServerErrorTCPTwoConnOneSession(t *testing.T) {
 	desc1 := doDescribe(t, conn1)
 
 	inTH := &headers.Transport{
-		Protocol: headers.TransportProtocolTCP,
-		Delivery: func() *headers.TransportDelivery {
-			v := headers.TransportDeliveryUnicast
-			return &v
-		}(),
-		Mode: func() *headers.TransportMode {
-			v := headers.TransportModePlay
-			return &v
-		}(),
+		Protocol:       headers.TransportProtocolTCP,
+		Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+		Mode:           transportModePtr(headers.TransportModePlay),
 		InterleavedIDs: &[2]int{0, 1},
 	}
 
@@ -494,15 +515,9 @@ func TestServerErrorTCPTwoConnOneSession(t *testing.T) {
 		Header: base.Header{
 			"CSeq": base.HeaderValue{"1"},
 			"Transport": headers.Transport{
-				Protocol: headers.TransportProtocolTCP,
-				Delivery: func() *headers.TransportDelivery {
-					v := headers.TransportDeliveryUnicast
-					return &v
-				}(),
-				Mode: func() *headers.TransportMode {
-					v := headers.TransportModePlay
-					return &v
-				}(),
+				Protocol:       headers.TransportProtocolTCP,
+				Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+				Mode:           transportModePtr(headers.TransportModePlay),
 				InterleavedIDs: &[2]int{0, 1},
 			}.Marshal(),
 			"Session": base.HeaderValue{session},
@@ -556,15 +571,9 @@ func TestServerErrorTCPOneConnTwoSessions(t *testing.T) {
 	desc := doDescribe(t, conn)
 
 	inTH := &headers.Transport{
-		Protocol: headers.TransportProtocolTCP,
-		Delivery: func() *headers.TransportDelivery {
-			v := headers.TransportDeliveryUnicast
-			return &v
-		}(),
-		Mode: func() *headers.TransportMode {
-			v := headers.TransportModePlay
-			return &v
-		}(),
+		Protocol:       headers.TransportProtocolTCP,
+		Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+		Mode:           transportModePtr(headers.TransportModePlay),
 		InterleavedIDs: &[2]int{0, 1},
 	}
 
@@ -580,15 +589,9 @@ func TestServerErrorTCPOneConnTwoSessions(t *testing.T) {
 		Header: base.Header{
 			"CSeq": base.HeaderValue{"3"},
 			"Transport": headers.Transport{
-				Protocol: headers.TransportProtocolTCP,
-				Delivery: func() *headers.TransportDelivery {
-					v := headers.TransportDeliveryUnicast
-					return &v
-				}(),
-				Mode: func() *headers.TransportMode {
-					v := headers.TransportModePlay
-					return &v
-				}(),
+				Protocol:       headers.TransportProtocolTCP,
+				Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+				Mode:           transportModePtr(headers.TransportModePlay),
 				InterleavedIDs: &[2]int{0, 1},
 			}.Marshal(),
 		},
@@ -632,26 +635,14 @@ func TestServerSetupMultipleTransports(t *testing.T) {
 
 	inTHS := headers.Transports{
 		{
-			Delivery: func() *headers.TransportDelivery {
-				v := headers.TransportDeliveryUnicast
-				return &v
-			}(),
-			Mode: func() *headers.TransportMode {
-				v := headers.TransportModePlay
-				return &v
-			}(),
+			Delivery:    deliveryPtr(headers.TransportDeliveryUnicast),
+			Mode:        transportModePtr(headers.TransportModePlay),
 			Protocol:    headers.TransportProtocolUDP,
 			ClientPorts: &[2]int{35466, 35467},
 		},
 		{
-			Delivery: func() *headers.TransportDelivery {
-				v := headers.TransportDeliveryUnicast
-				return &v
-			}(),
-			Mode: func() *headers.TransportMode {
-				v := headers.TransportModePlay
-				return &v
-			}(),
+			Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+			Mode:           transportModePtr(headers.TransportModePlay),
 			Protocol:       headers.TransportProtocolTCP,
 			InterleavedIDs: &[2]int{0, 1},
 		},
@@ -672,10 +663,7 @@ func TestServerSetupMultipleTransports(t *testing.T) {
 	err = th.Unmarshal(res.Header["Transport"])
 	require.NoError(t, err)
 	require.Equal(t, headers.Transport{
-		Delivery: func() *headers.TransportDelivery {
-			v := headers.TransportDeliveryUnicast
-			return &v
-		}(),
+		Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
 		Protocol:       headers.TransportProtocolTCP,
 		InterleavedIDs: &[2]int{0, 1},
 	}, th)
@@ -745,15 +733,9 @@ func TestServerGetSetParameter(t *testing.T) {
 
 			if ca == "inside session" {
 				inTH := &headers.Transport{
-					Protocol: headers.TransportProtocolTCP,
-					Delivery: func() *headers.TransportDelivery {
-						v := headers.TransportDeliveryUnicast
-						return &v
-					}(),
-					Mode: func() *headers.TransportMode {
-						v := headers.TransportModePlay
-						return &v
-					}(),
+					Protocol:       headers.TransportProtocolTCP,
+					Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+					Mode:           transportModePtr(headers.TransportModePlay),
 					InterleavedIDs: &[2]int{0, 1},
 				}
 
@@ -892,15 +874,9 @@ func TestServerSessionClose(t *testing.T) {
 	desc := doDescribe(t, conn)
 
 	inTH := &headers.Transport{
-		Protocol: headers.TransportProtocolTCP,
-		Delivery: func() *headers.TransportDelivery {
-			v := headers.TransportDeliveryUnicast
-			return &v
-		}(),
-		Mode: func() *headers.TransportMode {
-			v := headers.TransportModePlay
-			return &v
-		}(),
+		Protocol:       headers.TransportProtocolTCP,
+		Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+		Mode:           transportModePtr(headers.TransportModePlay),
 		InterleavedIDs: &[2]int{0, 1},
 	}
 
@@ -972,15 +948,9 @@ func TestServerSessionAutoClose(t *testing.T) {
 			desc := doDescribe(t, conn)
 
 			inTH := &headers.Transport{
-				Protocol: headers.TransportProtocolTCP,
-				Delivery: func() *headers.TransportDelivery {
-					v := headers.TransportDeliveryUnicast
-					return &v
-				}(),
-				Mode: func() *headers.TransportMode {
-					v := headers.TransportModePlay
-					return &v
-				}(),
+				Protocol:       headers.TransportProtocolTCP,
+				Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+				Mode:           transportModePtr(headers.TransportModePlay),
 				InterleavedIDs: &[2]int{0, 1},
 			}
 
@@ -1041,15 +1011,9 @@ func TestServerSessionTeardown(t *testing.T) {
 	desc := doDescribe(t, conn)
 
 	inTH := &headers.Transport{
-		Protocol: headers.TransportProtocolTCP,
-		Delivery: func() *headers.TransportDelivery {
-			v := headers.TransportDeliveryUnicast
-			return &v
-		}(),
-		Mode: func() *headers.TransportMode {
-			v := headers.TransportModePlay
-			return &v
-		}(),
+		Protocol:       headers.TransportProtocolTCP,
+		Delivery:       deliveryPtr(headers.TransportDeliveryUnicast),
+		Mode:           transportModePtr(headers.TransportModePlay),
 		InterleavedIDs: &[2]int{0, 1},
 	}
 
